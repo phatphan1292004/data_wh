@@ -1,0 +1,19 @@
+{
+  "type": "mysql",
+  "connection": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "dwh_user",
+    "password": "your_password",
+    "database": "movie_dwh"
+  },
+  "tables": {
+    "fact_movie": "fact_movie",
+    "dim_date": "dim_date",
+    "dim_genre": "dim_genre",
+    "dim_country": "dim_country",
+    "dim_person": "dim_person",
+    "bridge_movie_genre": "bridge_movie_genre",
+    "bridge_movie_person": "bridge_movie_person"
+  }
+}

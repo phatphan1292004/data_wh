@@ -1,0 +1,26 @@
+{
+  "fieldMapping": {
+    "Tình trạng": "status",
+    "Số tập": "totalEpisodes",
+    "Thời lượng": "duration",
+    "Năm phát hành": "releaseYear",
+    "Chất lượng": "quality",
+    "Ngôn ngữ": "language",
+    "Đạo diễn": "director",
+    "Diễn viên": "actors",
+    "Thể loại": "genre",
+    "Quốc gia": "originCountry"
+  },
+  "dataTypes": {
+    "status": "string",
+    "totalEpisodes": "integer",
+    "duration": "string",
+    "releaseYear": "integer",
+    "quality": "string",
+    "language": "string",
+    "director": "array",
+    "actors": "array",
+    "genre": "array",
+    "originCountry": "array"
+  }
+}

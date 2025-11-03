@@ -1,0 +1,31 @@
+{
+  "kkphim": {
+    "baseUrl": "https://kkphim.com/",
+    "selectors": {
+      "movieTable": "table tr",
+      "movieTitle": "td:first-child a",
+      "movieLink": "td:first-child a",
+      "tmdbId": "td:nth-child(4) a",
+      "status": "td:nth-child(3)",
+      "category": "td:nth-child(5)",
+      "updatedAt": "td:nth-child(7)",
+      "poster": "img.rounded-md",
+      "infoTable": "table.w-full tr",
+      "description": ".card-collapse-content article > header > p, .card-collapse-content",
+      "episodes": ".card-collapse-content .py-2.uppercase.font-bold"
+    },
+    "crawlSchedule": {
+      "enabled": true,
+      "cron": "0 */6 * * *",
+      "timezone": "Asia/Ho_Chi_Minh"
+    },
+    "limits": {
+      "maxMovies": 10,
+      "timeout": 90000,
+      "retryAttempts": 3
+    },
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+    }
+  }
+}

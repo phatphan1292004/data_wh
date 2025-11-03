@@ -1,0 +1,12 @@
+{
+  "type": "sqlite",
+  "connection": {
+    "filename": "./data/staging/kkphim_metadata.sqlite"
+  },
+  "tables": {
+    "raw_movies": "raw_movies",
+    "staging_movies": "staging_movies",
+    "validation_errors": "validation_errors",
+    "processing_log": "processing_log"
+  }
+}

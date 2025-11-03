@@ -1,0 +1,31 @@
+{
+  "name": "movie-dwh",
+  "version": "1.0.0",
+  "description": "Movie Data Warehouse ETL Pipeline",
+  "main": "index.js",
+  "scripts": {
+    "crawl": "node scripts/crawl-once.js",
+    "staging": "node scripts/run-staging.js",
+    "rebuild": "node scripts/rebuild-warehouse.js",
+    "scheduler": "node src/scheduler/cron.js",
+    "setup:db": "node scripts/setup-database.js",
+    "test": "jest"
+  },
+  "keywords": [
+    "etl",
+    "data-warehouse",
+    "crawler",
+    "movies"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "mysql2": "^3.6.5",
+    "node-cron": "^3.0.3",
+    "puppeteer": "^24.28.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
