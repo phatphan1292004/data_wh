@@ -4,11 +4,11 @@
   "description": "Movie Data Warehouse ETL Pipeline",
   "main": "index.js",
   "scripts": {
-    "crawl": "node scripts/crawl-once.js",
-    "staging": "node scripts/run-staging.js",
-    "rebuild": "node scripts/rebuild-warehouse.js",
-    "scheduler": "node src/scheduler/cron.js",
-    "setup:db": "node scripts/setup-database.js",
+    "crawl": "node scripts/crawling/crawl-once.js",
+    "setup:db": "node scripts/load-staging/setup-database.js",
+    "load:staging": "node scripts/load-staging/load-raw-to-staging.js",
+    "transform": "node scripts/transform/run-staging.js",
+    "scheduler": "node scripts/accesstool-scheduler/cron.js",
     "test": "jest"
   },
   "keywords": [

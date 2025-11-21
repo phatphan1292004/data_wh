@@ -1,31 +1,32 @@
-require('dotenv').config();
-const mysql = require('mysql2/promise');
-const logger = require('../../../utils/logger');
+require("dotenv").config();
+const mysql = require("mysql2/promise");
+const logger = require("../../../utils/logger");
 
 async function loadToWarehouse() {
   const stagingConn = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
+    host: process.env.DB_HOST || "localhost",
     port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'root',
+    user: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD,
-    database: process.env.STAGING_DB_NAME || 'movie_staging'
+    database: process.env.STAGING_DB_NAME || "movie_staging",
   });
 
   const warehouseConn = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
+    host: process.env.DB_HOST || "localhost",
     port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'root',
+    user: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD,
-    database: process.env.WAREHOUSE_DB_NAME || 'movie_dwh'
+    database: process.env.WAREHOUSE_DB_NAME || "movie_dwh",
   });
 
   try {
     // Lấy movies hợp lệ từ staging (không duplicate, không có validation errors)
+    // Sửa lại điều kiện: is_duplicate = 0 (tinyint)
     const [validMovies] = await stagingConn.query(`
       SELECT s.* 
       FROM staging_movies s
       LEFT JOIN validation_errors v ON s.id = v.staging_id
-      WHERE s.is_duplicate = FALSE
+      WHERE s.is_duplicate = 0
       AND v.id IS NULL
     `);
 
@@ -36,7 +37,7 @@ async function loadToWarehouse() {
     for (const movie of validMovies) {
       // 1. Load genres
       if (movie.genre) {
-        const genres = movie.genre.split(',').map(g => g.trim());
+        const genres = movie.genre.split(",").map((g) => g.trim());
         for (const genreName of genres) {
           await warehouseConn.query(
             `INSERT IGNORE INTO dim_genre (genre_name) VALUES (?)`,
@@ -47,7 +48,7 @@ async function loadToWarehouse() {
 
       // 2. Load countries
       if (movie.origin_country) {
-        const countries = movie.origin_country.split(',').map(c => c.trim());
+        const countries = movie.origin_country.split(",").map((c) => c.trim());
         for (const countryName of countries) {
           await warehouseConn.query(
             `INSERT IGNORE INTO dim_country (country_name) VALUES (?)`,
@@ -58,13 +59,13 @@ async function loadToWarehouse() {
 
       // 3. Load persons (directors & actors)
       const persons = new Set();
-      
+
       if (movie.director) {
-        movie.director.split(',').forEach(d => persons.add(d.trim()));
+        movie.director.split(",").forEach((d) => persons.add(d.trim()));
       }
-      
+
       if (movie.actors) {
-        movie.actors.split(',').forEach(a => persons.add(a.trim()));
+        movie.actors.split(",").forEach((a) => persons.add(a.trim()));
       }
 
       for (const personName of persons) {
@@ -75,31 +76,30 @@ async function loadToWarehouse() {
       }
 
       // 4. Load fact_movie
+      // Đảm bảo chỉ có 1 bản ghi is_current=TRUE cho mỗi tmdb_id + source
       const [existingMovie] = await warehouseConn.query(
         `SELECT * FROM fact_movie WHERE tmdb_id = ? AND source = ? AND is_current = TRUE`,
-        [movie.tmdb_id, 'kkphim']
+        [movie.tmdb_id, "kkphim"]
       );
 
-      if (existingMovie.length > 0) {
-        // SCD Type 2: Close old record
-        await warehouseConn.query(
-          `UPDATE fact_movie 
-           SET valid_to = NOW(), is_current = FALSE 
-           WHERE movie_key = ?`,
-          [existingMovie[0].movie_key]
-        );
-      }
+      // Luôn update tất cả bản ghi cũ về is_current = FALSE
+      await warehouseConn.query(
+        `UPDATE fact_movie 
+         SET valid_to = NOW(), is_current = FALSE 
+         WHERE tmdb_id = ? AND source = ? AND is_current = TRUE`,
+        [movie.tmdb_id, "kkphim"]
+      );
 
       // Insert new record
       const [movieResult] = await warehouseConn.query(
         `INSERT INTO fact_movie (
           tmdb_id, source, title, description, poster_url, detail_url,
           total_episodes, quality, language, status, category,
-          release_year, crawled_at, updated_at, episodes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          release_year, crawled_at, updated_at, episodes, is_current
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
         [
           movie.tmdb_id,
-          'kkphim',
+          "kkphim",
           movie.title,
           movie.description,
           movie.poster,
@@ -112,7 +112,7 @@ async function loadToWarehouse() {
           movie.release_year,
           movie.crawled_at,
           movie.updated_at,
-          movie.episodes
+          movie.episodes,
         ]
       );
 
@@ -121,10 +121,10 @@ async function loadToWarehouse() {
       // 5. Load bridge tables
       // Genre bridge
       if (movie.genre) {
-        const genres = movie.genre.split(',').map(g => g.trim());
+        const genres = movie.genre.split(",").map((g) => g.trim());
         for (const genreName of genres) {
           const [genreRow] = await warehouseConn.query(
-            'SELECT genre_key FROM dim_genre WHERE genre_name = ?',
+            "SELECT genre_key FROM dim_genre WHERE genre_name = ?",
             [genreName]
           );
           if (genreRow.length > 0) {
@@ -138,10 +138,10 @@ async function loadToWarehouse() {
 
       // Country bridge
       if (movie.origin_country) {
-        const countries = movie.origin_country.split(',').map(c => c.trim());
+        const countries = movie.origin_country.split(",").map((c) => c.trim());
         for (const countryName of countries) {
           const [countryRow] = await warehouseConn.query(
-            'SELECT country_key FROM dim_country WHERE country_name = ?',
+            "SELECT country_key FROM dim_country WHERE country_name = ?",
             [countryName]
           );
           if (countryRow.length > 0) {
@@ -155,10 +155,10 @@ async function loadToWarehouse() {
 
       // Person bridge (directors)
       if (movie.director) {
-        const directors = movie.director.split(',').map(d => d.trim());
+        const directors = movie.director.split(",").map((d) => d.trim());
         for (const directorName of directors) {
           const [personRow] = await warehouseConn.query(
-            'SELECT person_key FROM dim_person WHERE person_name = ?',
+            "SELECT person_key FROM dim_person WHERE person_name = ?",
             [directorName]
           );
           if (personRow.length > 0) {
@@ -173,10 +173,10 @@ async function loadToWarehouse() {
 
       // Person bridge (actors)
       if (movie.actors) {
-        const actors = movie.actors.split(',').map(a => a.trim());
+        const actors = movie.actors.split(",").map((a) => a.trim());
         for (const actorName of actors) {
           const [personRow] = await warehouseConn.query(
-            'SELECT person_key FROM dim_person WHERE person_name = ?',
+            "SELECT person_key FROM dim_person WHERE person_name = ?",
             [actorName]
           );
           if (personRow.length > 0) {
@@ -202,7 +202,6 @@ async function loadToWarehouse() {
     logger.info(`Loaded ${loadedCount} movies to warehouse`);
 
     return { loaded: loadedCount };
-
   } finally {
     await stagingConn.end();
     await warehouseConn.end();

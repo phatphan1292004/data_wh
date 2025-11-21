@@ -47,38 +47,42 @@ async function deduplicateMovies() {
     let insertedCount = 0;
     for (const raw of rawMovies) {
       const movie = JSON.parse(raw.raw_data);
-      
-      await connection.query(
-        `INSERT INTO staging_movies (
-          raw_id, title, tmdb_id, detail_url, status, category,
-          total_episodes, duration, release_year, quality, language,
-          director, actors, genre, origin_country, poster, description,
-          episodes, updated_at, crawled_at, processing_step
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'deduplicate')`,
-        [
-          raw.id,
-          movie.title,
-          movie.tmdbId,
-          movie.detailUrl,
-          movie.status,
-          movie.category,
-          parseInt(movie.totalEpisodes) || null,
-          movie.duration,
-          parseInt(movie.releaseYear) || null,
-          movie.quality,
-          movie.language,
-          movie.director,
-          movie.actors,
-          movie.genre,
-          movie.originCountry,
-          movie.poster,
-          movie.description,
-          JSON.stringify(movie.episodes),
-          movie.updatedAt,
-          movie.crawledAt
-        ]
-      );
-      insertedCount++;
+      try {
+        await connection.query(
+          `INSERT INTO staging_movies (
+            raw_id, title, tmdb_id, detail_url, status, category,
+            total_episodes, duration, release_year, quality, language,
+            director, actors, genre, origin_country, poster, description,
+            episodes, updated_at, crawled_at, processing_step
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'deduplicate')`,
+          [
+            raw.id,
+            movie.title,
+            movie.tmdbId,
+            movie.detailUrl,
+            movie.status,
+            movie.category,
+            parseInt(movie.totalEpisodes) || null,
+            movie.duration,
+            parseInt(movie.releaseYear) || null,
+            movie.quality,
+            movie.language,
+            movie.director,
+            movie.actors,
+            movie.genre,
+            movie.originCountry,
+            movie.poster,
+            movie.description,
+            JSON.stringify(movie.episodes),
+            movie.updatedAt,
+            movie.crawledAt
+          ]
+        );
+        insertedCount++;
+      } catch (err) {
+        logger.error('Insert into staging_movies error:', err);
+        logger.error('Movie data:', movie);
+      }
     }
 
     logger.info(`Inserted ${insertedCount} records into staging_movies`);

@@ -18,7 +18,7 @@ async function setupDatabases() {
     // 1. Setup Staging Database
     console.log('📦 Creating staging database...');
     const stagingSQL = await fs.readFile(
-      path.join(__dirname, '../src/staging/models/create-tables.sql'),
+      path.join(__dirname, '../../src/staging/models/create-tables.sql'),
       'utf8'
     );
     await connection.query(stagingSQL);
@@ -37,7 +37,7 @@ async function setupDatabases() {
 
     for (const file of schemaFiles) {
       const sql = await fs.readFile(
-        path.join(__dirname, `../src/warehouse/schema/${file}`),
+        path.join(__dirname, `../../src/warehouse/schema/${file}`),
         'utf8'
       );
       await connection.query(sql);

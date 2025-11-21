@@ -1,4 +1,4 @@
-const { crawlKKPhim } = require("../src/crawler");
+  const { crawlKKPhim } = require("../../src/crawler");
 
 (async () => {
   try {

@@ -1,4 +1,4 @@
-const { runStagingPipeline } = require('../src/staging/steps/pipeline');
+const { runStagingPipeline } = require('../../src/staging/steps/pipeline');
 
 (async () => {
   try {
