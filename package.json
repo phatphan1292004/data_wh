@@ -9,6 +9,7 @@
     "load:staging": "node scripts/load-staging/load-raw-to-staging.js",
     "transform": "node scripts/transform/run-staging.js",
     "scheduler": "node scripts/accesstool-scheduler/cron.js",
+    "etl": "node scripts/run-etl.js",
     "test": "jest"
   },
   "keywords": [
