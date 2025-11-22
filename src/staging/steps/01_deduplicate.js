@@ -13,21 +13,23 @@ async function deduplicateMovies() {
     database: process.env.STAGING_DB_NAME || 'movie_staging'
   });
 
+  let logId = null;
+  const startTime = new Date();
+  let status = 'success';
+  let errorMessage = null;
+  let insertedCount = 0;
+  let duplicateCount = 0;
   try {
     // 1. Load raw data từ file JSON mới nhất
     const rawDir = path.join(__dirname, '../../../data/raw');
     const files = await fs.readdir(rawDir);
     const jsonFiles = files.filter(f => f.endsWith('.json')).sort().reverse();
-    
     if (jsonFiles.length === 0) {
       throw new Error('No raw data files found');
     }
-
     const latestFile = path.join(rawDir, jsonFiles[0]);
     logger.info(`Loading data from: ${jsonFiles[0]}`);
-    
     const rawData = JSON.parse(await fs.readFile(latestFile, 'utf8'));
-    
     // 2. Insert vào raw_movies
     for (const movie of rawData.data) {
       await connection.query(
@@ -36,15 +38,11 @@ async function deduplicateMovies() {
         [rawData.metadata.source, JSON.stringify(movie), movie.crawledAt]
       );
     }
-    
     logger.info(`Inserted ${rawData.data.length} records into raw_movies`);
-
     // 3. Load vào staging_movies (chưa deduplicate)
     const [rawMovies] = await connection.query(
       'SELECT * FROM raw_movies WHERE processed = FALSE'
     );
-
-    let insertedCount = 0;
     for (const raw of rawMovies) {
       const movie = JSON.parse(raw.raw_data);
       try {
@@ -84,9 +82,7 @@ async function deduplicateMovies() {
         logger.error('Movie data:', movie);
       }
     }
-
     logger.info(`Inserted ${insertedCount} records into staging_movies`);
-
     // 4. Đánh dấu duplicates dựa trên tmdb_id
     await connection.query(`
       UPDATE staging_movies s1
@@ -101,22 +97,57 @@ async function deduplicateMovies() {
           s1.duplicate_of = s2.first_id
       WHERE s1.id != s2.first_id
     `);
-
     const [duplicates] = await connection.query(
       'SELECT COUNT(*) as count FROM staging_movies WHERE is_duplicate = TRUE'
     );
-
-    logger.info(`Found ${duplicates[0].count} duplicate records`);
-
+    duplicateCount = duplicates[0].count;
+    logger.info(`Found ${duplicateCount} duplicate records`);
     // 5. Đánh dấu raw_movies đã xử lý
     await connection.query('UPDATE raw_movies SET processed = TRUE WHERE processed = FALSE');
-
+    // Ghi log vào bảng processing_log
+    const [logResult] = await connection.query(
+      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        `batch_${startTime.getTime()}`,
+        'deduplicate',
+        status,
+        insertedCount,
+        insertedCount - duplicateCount,
+        duplicateCount,
+        startTime,
+        new Date(),
+        null
+      ]
+    );
+    logId = logResult.insertId;
     return {
       total: insertedCount,
-      duplicates: duplicates[0].count,
-      unique: insertedCount - duplicates[0].count
+      duplicates: duplicateCount,
+      unique: insertedCount - duplicateCount,
+      logId
     };
-
+  } catch (error) {
+    status = 'failed';
+    errorMessage = error.message || String(error);
+    logger.error('Deduplicate step failed:', error);
+    // Ghi log lỗi vào bảng processing_log
+    await connection.query(
+      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        `batch_${startTime.getTime()}`,
+        'deduplicate',
+        status,
+        insertedCount,
+        insertedCount - duplicateCount,
+        duplicateCount,
+        startTime,
+        new Date(),
+        errorMessage
+      ]
+    );
+    throw error;
   } finally {
     await connection.end();
   }

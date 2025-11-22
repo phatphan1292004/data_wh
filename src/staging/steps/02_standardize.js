@@ -11,11 +11,16 @@ async function standardizeData() {
     database: process.env.STAGING_DB_NAME || 'movie_staging'
   });
 
+  let logId = null;
+  const startTime = new Date();
+  let status = 'success';
+  let errorMessage = null;
+  let standardizedCount = 0;
   try {
     // 1. Chuẩn hóa title: trim, loại bỏ khoảng trắng thừa
     await connection.query(`
       UPDATE staging_movies 
-      SET title = TRIM(REGEXP_REPLACE(title, '\\s+', ' '))
+      SET title = TRIM(REGEXP_REPLACE(title, '\s+', ' '))
       WHERE is_duplicate = FALSE
     `);
 
@@ -53,11 +58,48 @@ async function standardizeData() {
     const [result] = await connection.query(
       'SELECT COUNT(*) as count FROM staging_movies WHERE is_duplicate = FALSE'
     );
+    standardizedCount = result[0].count;
+    logger.info(`Standardized ${standardizedCount} records`);
 
-    logger.info(`Standardized ${result[0].count} records`);
-
-    return { standardized: result[0].count };
-
+    // Ghi log vào bảng processing_log
+    const [logResult] = await connection.query(
+      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        `batch_${startTime.getTime()}`,
+        'standardize',
+        status,
+        standardizedCount,
+        standardizedCount,
+        0,
+        startTime,
+        new Date(),
+        null
+      ]
+    );
+    logId = logResult.insertId;
+    return { standardized: standardizedCount, logId };
+  } catch (error) {
+    status = 'failed';
+    errorMessage = error.message || String(error);
+    logger.error('Standardize step failed:', error);
+    // Ghi log lỗi vào bảng processing_log
+    await connection.query(
+      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        `batch_${startTime.getTime()}`,
+        'standardize',
+        status,
+        standardizedCount,
+        0,
+        standardizedCount,
+        startTime,
+        new Date(),
+        errorMessage
+      ]
+    );
+    throw error;
   } finally {
     await connection.end();
   }
