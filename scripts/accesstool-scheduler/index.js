@@ -1,30 +1,31 @@
-
-const { SystemMonitor, monitorSystem } = require('../../src/scheduler/monitor');
-const { reportMovieStats } = require('./accesstool');
+const { SystemMonitor, monitorSystem } = require("../../src/scheduler/monitor");
+const { reportMovieStats } = require("./accesstool");
 
 async function runAccessToolScheduler() {
   // 1. Kiểm tra hệ thống
   const healthReport = await monitorSystem();
-  console.log('=== AccessTool Scheduler Health Report ===');
+  console.log("=== AccessTool Scheduler Health Report ===");
   console.log(JSON.stringify(healthReport, null, 2));
 
   // 2. Báo cáo dữ liệu warehouse
-  console.log('\n=== Movie Warehouse Data Report ===');
+  console.log("\n=== Movie Warehouse Data Report ===");
   const stats = await reportMovieStats();
-  console.log('Tổng số phim:', stats.totalMovies);
-  console.log('Top thể loại:');
-  stats.topGenres.forEach(g => console.log(`- ${g.genre_name}: ${g.count}`));
-  console.log('Top quốc gia:');
-  stats.topCountries.forEach(c => console.log(`- ${c.country_name}: ${c.count}`));
+  console.log("Tổng số phim:", stats.totalMovies);
+  console.log("Top thể loại:");
+  stats.topGenres.forEach((g) => console.log(`- ${g.genre_name}: ${g.count}`));
+  console.log("Top quốc gia:");
+  stats.topCountries.forEach((c) =>
+    console.log(`- ${c.country_name}: ${c.count}`)
+  );
 
   // 3. Truy vấn sâu về chất lượng dữ liệu
-  const mysql = require('mysql2/promise');
+  const mysql = require("mysql2/promise");
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
+    host: process.env.DB_HOST || "localhost",
     port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'root',
+    user: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD,
-    database: process.env.WAREHOUSE_DB_NAME || 'movie_dwh',
+    database: process.env.WAREHOUSE_DB_NAME || "movie_dwh",
   });
 
   // Phim không có thể loại
@@ -53,18 +54,20 @@ async function runAccessToolScheduler() {
 
   await connection.end();
 
-  console.log('\n=== Data Quality Deep Check ===');
+  console.log("\n=== Data Quality Deep Check ===");
   console.log(`Phim không có thể loại: ${noGenre[0].count}`);
   console.log(`Phim không có quốc gia: ${noCountry[0].count}`);
   console.log(`Phim không có diễn viên: ${noActor[0].count}`);
-  console.log(`Phim thiếu thông tin quan trọng (title, poster, detail): ${missingInfo[0].count}`);
+  console.log(
+    `Phim thiếu thông tin quan trọng (title, poster, detail): ${missingInfo[0].count}`
+  );
 }
 
 if (require.main === module) {
   runAccessToolScheduler()
     .then(() => process.exit(0))
-    .catch(err => {
-      console.error('❌ AccessTool Scheduler failed:', err);
+    .catch((err) => {
+      console.error("❌ AccessTool Scheduler failed:", err);
       process.exit(1);
     });
 }

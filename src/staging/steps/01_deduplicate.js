@@ -1,35 +1,42 @@
-require('dotenv').config();
-const mysql = require('mysql2/promise');
-const fs = require('fs').promises;
-const path = require('path');
-const logger = require('../../../utils/logger');
+require("dotenv").config();
+const mysql = require("mysql2/promise");
+const fs = require("fs").promises;
+const path = require("path");
+const logger = require("../../../utils/logger");
+const {
+  startProcessLog,
+  endProcessLog,
+  generateBatchId,
+} = require("../../control/utils/logger");
 
 async function deduplicateMovies() {
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
+    host: process.env.DB_HOST || "localhost",
     port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'root',
+    user: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD,
-    database: process.env.STAGING_DB_NAME || 'movie_staging'
+    database: process.env.STAGING_DB_NAME || "movie_staging",
   });
 
-  let logId = null;
-  const startTime = new Date();
-  let status = 'success';
-  let errorMessage = null;
+  const batchId = generateBatchId("deduplicate");
   let insertedCount = 0;
   let duplicateCount = 0;
+
   try {
+    await startProcessLog(batchId, "deduplicate_movies");
     // 1. Load raw data từ file JSON mới nhất
-    const rawDir = path.join(__dirname, '../../../data/raw');
+    const rawDir = path.join(__dirname, "../../../data/raw");
     const files = await fs.readdir(rawDir);
-    const jsonFiles = files.filter(f => f.endsWith('.json')).sort().reverse();
+    const jsonFiles = files
+      .filter((f) => f.endsWith(".json"))
+      .sort()
+      .reverse();
     if (jsonFiles.length === 0) {
-      throw new Error('No raw data files found');
+      throw new Error("No raw data files found");
     }
     const latestFile = path.join(rawDir, jsonFiles[0]);
     logger.info(`Loading data from: ${jsonFiles[0]}`);
-    const rawData = JSON.parse(await fs.readFile(latestFile, 'utf8'));
+    const rawData = JSON.parse(await fs.readFile(latestFile, "utf8"));
     // 2. Insert vào raw_movies
     for (const movie of rawData.data) {
       await connection.query(
@@ -41,7 +48,7 @@ async function deduplicateMovies() {
     logger.info(`Inserted ${rawData.data.length} records into raw_movies`);
     // 3. Load vào staging_movies (chưa deduplicate)
     const [rawMovies] = await connection.query(
-      'SELECT * FROM raw_movies WHERE processed = FALSE'
+      "SELECT * FROM raw_movies WHERE processed = FALSE"
     );
     for (const raw of rawMovies) {
       const movie = JSON.parse(raw.raw_data);
@@ -73,13 +80,13 @@ async function deduplicateMovies() {
             movie.description,
             JSON.stringify(movie.episodes),
             movie.updatedAt,
-            movie.crawledAt
+            movie.crawledAt,
           ]
         );
         insertedCount++;
       } catch (err) {
-        logger.error('Insert into staging_movies error:', err);
-        logger.error('Movie data:', movie);
+        logger.error("Insert into staging_movies error:", err);
+        logger.error("Movie data:", movie);
       }
     }
     logger.info(`Inserted ${insertedCount} records into staging_movies`);
@@ -98,54 +105,37 @@ async function deduplicateMovies() {
       WHERE s1.id != s2.first_id
     `);
     const [duplicates] = await connection.query(
-      'SELECT COUNT(*) as count FROM staging_movies WHERE is_duplicate = TRUE'
+      "SELECT COUNT(*) as count FROM staging_movies WHERE is_duplicate = TRUE"
     );
     duplicateCount = duplicates[0].count;
     logger.info(`Found ${duplicateCount} duplicate records`);
     // 5. Đánh dấu raw_movies đã xử lý
-    await connection.query('UPDATE raw_movies SET processed = TRUE WHERE processed = FALSE');
-    // Ghi log vào bảng processing_log
-    const [logResult] = await connection.query(
-      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        `batch_${startTime.getTime()}`,
-        'deduplicate',
-        status,
-        insertedCount,
-        insertedCount - duplicateCount,
-        duplicateCount,
-        startTime,
-        new Date(),
-        null
-      ]
+    await connection.query(
+      "UPDATE raw_movies SET processed = TRUE WHERE processed = FALSE"
     );
-    logId = logResult.insertId;
+
+    await endProcessLog(
+      batchId,
+      "success",
+      insertedCount,
+      insertedCount - duplicateCount,
+      duplicateCount
+    );
     return {
       total: insertedCount,
       duplicates: duplicateCount,
       unique: insertedCount - duplicateCount,
-      logId
+      batchId,
     };
   } catch (error) {
-    status = 'failed';
-    errorMessage = error.message || String(error);
-    logger.error('Deduplicate step failed:', error);
-    // Ghi log lỗi vào bảng processing_log
-    await connection.query(
-      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        `batch_${startTime.getTime()}`,
-        'deduplicate',
-        status,
-        insertedCount,
-        insertedCount - duplicateCount,
-        duplicateCount,
-        startTime,
-        new Date(),
-        errorMessage
-      ]
+    logger.error("Deduplicate step failed:", error);
+    await endProcessLog(
+      batchId,
+      "failed",
+      insertedCount,
+      insertedCount - duplicateCount,
+      duplicateCount,
+      error.message
     );
     throw error;
   } finally {

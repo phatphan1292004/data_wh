@@ -1,20 +1,22 @@
 const KKPhimCrawler = require("./kkphim.crawler");
 const RawDataSaver = require("./save-raw");
 const logger = require("../../utils/logger");
+const {
+  startProcessLog,
+  endProcessLog,
+  generateBatchId,
+} = require("../control/utils/logger");
 
 async function crawlKKPhim() {
   const crawler = new KKPhimCrawler();
   const saver = new RawDataSaver();
 
-  const mysql = require('mysql2/promise');
-  let logId = null;
-  const startTime = new Date();
-  let status = 'success';
-  let errorMessage = null;
+  const batchId = generateBatchId("crawl");
   let movieCount = 0;
   let savedPath = null;
-  let connection = null;
+
   try {
+    await startProcessLog(batchId, "crawl_kkphim");
     logger.info("Starting KKPhim crawl...");
     await crawler.initialize();
     const movieList = await crawler.getMovieList();
@@ -37,70 +39,27 @@ async function crawlKKPhim() {
     savedPath = await saver.save(enrichedMovies, "kkphim");
     movieCount = enrichedMovies.length;
     logger.info(`Crawl completed. Saved ${movieCount} movies`);
-    // Ghi log vào bảng processing_log
-    connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 3306,
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD,
-      database: process.env.STAGING_DB_NAME || 'movie_staging'
-    });
-    const [logResult] = await connection.query(
-      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        `batch_${startTime.getTime()}`,
-        'crawl',
-        status,
-        movieCount,
-        movieCount,
-        0,
-        startTime,
-        new Date(),
-        null
-      ]
-    );
-    logId = logResult.insertId;
+
+    await endProcessLog(batchId, "success", movieCount, movieCount, 0);
     return {
       success: true,
       count: movieCount,
       path: savedPath,
-      logId
+      batchId,
     };
   } catch (error) {
-    status = 'failed';
-    errorMessage = error.message || String(error);
     logger.error("Crawl failed:", error);
-    // Ghi log lỗi vào bảng processing_log
-    if (!connection) {
-      const mysql = require('mysql2/promise');
-      connection = await mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        port: process.env.DB_PORT || 3306,
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD,
-        database: process.env.STAGING_DB_NAME || 'movie_staging'
-      });
-    }
-    await connection.query(
-      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        `batch_${startTime.getTime()}`,
-        'crawl',
-        status,
-        movieCount,
-        0,
-        movieCount,
-        startTime,
-        new Date(),
-        errorMessage
-      ]
+    await endProcessLog(
+      batchId,
+      "failed",
+      movieCount,
+      0,
+      movieCount,
+      error.message
     );
     throw error;
   } finally {
     await crawler.close();
-    if (connection) await connection.end();
   }
 }
 

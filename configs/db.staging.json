@@ -6,7 +6,6 @@
   "tables": {
     "raw_movies": "raw_movies",
     "staging_movies": "staging_movies",
-    "validation_errors": "validation_errors",
-    "processing_log": "processing_log"
+    "validation_errors": "validation_errors"
   }
 }

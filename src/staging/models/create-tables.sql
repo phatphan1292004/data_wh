@@ -60,20 +60,3 @@ CREATE TABLE IF NOT EXISTS validation_errors (
     INDEX idx_error_type (error_type),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Bảng log xử lý
-CREATE TABLE IF NOT EXISTS processing_log (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    batch_id VARCHAR(100),
-    step_name VARCHAR(100),
-    status VARCHAR(50),
-    records_processed INT,
-    records_success INT,
-    records_failed INT,
-    start_time TIMESTAMP NULL DEFAULT NULL,
-    end_time TIMESTAMP NULL DEFAULT NULL,
-    error_message TEXT,
-    INDEX idx_batch_id (batch_id),
-    INDEX idx_step_name (step_name),
-    INDEX idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

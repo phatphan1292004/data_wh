@@ -1,6 +1,11 @@
 require("dotenv").config();
 const mysql = require("mysql2/promise");
 const logger = require("../../../utils/logger");
+const {
+  startProcessLog,
+  endProcessLog,
+  generateBatchId,
+} = require("../../control/utils/logger");
 
 async function loadToWarehouse() {
   const stagingConn = await mysql.createConnection({
@@ -19,12 +24,12 @@ async function loadToWarehouse() {
     database: process.env.WAREHOUSE_DB_NAME || "movie_dwh",
   });
 
-  let logId = null;
-  const startTime = new Date();
-  let status = "success";
-  let errorMessage = null;
+  const batchId = generateBatchId("load_to_dw");
   let loadedCount = 0;
+  let totalCount = 0;
+
   try {
+    await startProcessLog(batchId, "load_to_warehouse");
     // Lấy movies hợp lệ từ staging (không duplicate, không có validation errors)
     const [validMovies] = await stagingConn.query(`
       SELECT s.* 
@@ -33,7 +38,8 @@ async function loadToWarehouse() {
       WHERE s.is_duplicate = 0
       AND v.id IS NULL
     `);
-    logger.info(`Loading ${validMovies.length} valid movies to warehouse...`);
+    totalCount = validMovies.length;
+    logger.info(`Loading ${totalCount} valid movies to warehouse...`);
     for (const movie of validMovies) {
       // 1. Load genres
       if (movie.genre) {
@@ -198,43 +204,24 @@ async function loadToWarehouse() {
       WHERE is_duplicate = FALSE
     `);
     logger.info(`Loaded ${loadedCount} movies to warehouse`);
-    // Ghi log vào bảng processing_log
-    const [logResult] = await stagingConn.query(
-      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        `batch_${startTime.getTime()}`,
-        "load_to_dw",
-        status,
-        validMovies.length,
-        loadedCount,
-        validMovies.length - loadedCount,
-        startTime,
-        new Date(),
-        null,
-      ]
+
+    await endProcessLog(
+      batchId,
+      "success",
+      totalCount,
+      loadedCount,
+      totalCount - loadedCount
     );
-    logId = logResult.insertId;
-    return { loaded: loadedCount, logId };
+    return { loaded: loadedCount, batchId };
   } catch (error) {
-    status = "failed";
-    errorMessage = error.message || String(error);
     logger.error("Load to DW step failed:", error);
-    // Ghi log lỗi vào bảng processing_log
-    await stagingConn.query(
-      `INSERT INTO processing_log (batch_id, step_name, status, records_processed, records_success, records_failed, start_time, end_time, error_message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        `batch_${startTime.getTime()}`,
-        "load_to_dw",
-        status,
-        0,
-        0,
-        0,
-        startTime,
-        new Date(),
-        errorMessage,
-      ]
+    await endProcessLog(
+      batchId,
+      "failed",
+      totalCount,
+      loadedCount,
+      totalCount - loadedCount,
+      error.message
     );
     throw error;
   } finally {
